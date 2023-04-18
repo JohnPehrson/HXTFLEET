@@ -71,52 +71,55 @@ run_scales = [images_scales(1);images_scales(1);images_scales(1);...
               images_scales(2);g3g4_ave;g3g4_ave;g3g4_ave;g3g4_ave;g3g4_ave;images_scales(5)];
 
 %% Load Prerun Images
-% for i = 1:length(datapaths)
+prerun_row_averages = zeros(length(datapaths),2048); %indexes are run number, column
+
+for i = 1:length(datapaths)
+
+    % Prerun
+        %get folder name
+        run_filepath = fullfile(folderpath,datapaths(i));
+        nothave = ["run","readme"];
+        [filteredfiles_days] = Folders_in_Folder(run_filepath,"",nothave);
+        prerun_foldernames(i) = filteredfiles_days;
+        prerun_filefolder = fullfile(run_filepath,filteredfiles_days);
+        
+        av_prerun_filepath = fullfile(prerun_filefolder,"AVERAGE.mat");
+        have = ["mat"];
+        [filteredfiles_ims] = Folders_in_Folder(prerun_filefolder,have,"");
+     if ~isempty(filteredfiles_ims)
+        load(av_prerun_filepath);
+     else %If I haven't already got a time-average
+
+        %get files in folder
+        nothave = ["rec","mat","u"];
+        [prerun_files] = Folders_in_Folder(prerun_filefolder,"",nothave);
+
+        max_ims = min(length(prerun_files),2000);
+
+        prerun_ims = zeros(200,2048,max_ims);
+        prerun_row_averages = zeros(length(datapaths),2048); %indexes are run number, column
+        for k = 1:max_ims
+            fileNameCat = fullfile(prerun_filefolder,prerun_files(k));
+            prerun_ims(:,:,k) = double(imread(fileNameCat));
+        end
+        prerun_ave = mean(prerun_ims,3);
+        row_sum_prerun = mean(prerun_ave,1);
+        clear prerun_ims
+
+        save(av_prerun_filepath,'prerun_ave','row_sum_prerun');
+     end
+
+        %get rid of background 
+        prerun_row_averages(i,:) = row_sum_prerun-min(row_sum_prerun);
 % 
-%     % Prerun
-%         %get folder name
-%         run_filepath = fullfile(folderpath,datapaths(i));
-%         nothave = ["run","readme"];
-%         [filteredfiles_days] = Folders_in_Folder(run_filepath,"",nothave);
-%         prerun_foldernames(i) = filteredfiles_days;
-%         prerun_filefolder = fullfile(run_filepath,filteredfiles_days);
-%         
-%         av_prerun_filepath = fullfile(prerun_filefolder,"AVERAGE.mat");
-%         have = ["mat"];
-%         [filteredfiles_ims] = Folders_in_Folder(prerun_filefolder,have,"");
-%      if ~isempty(filteredfiles_ims)
-%         load(av_prerun_filepath);
-%      else %If I haven't already got a time-average
-% 
-%         %get files in folder
-%         nothave = ["rec","mat","u"];
-%         [prerun_files] = Folders_in_Folder(prerun_filefolder,"",nothave);
-% 
-%         max_ims = min(length(prerun_files),2000);
-% 
-%         prerun_ims = zeros(200,2048,max_ims);
-%         for k = 1:max_ims
-%             fileNameCat = fullfile(prerun_filefolder,prerun_files(k));
-%             prerun_ims(:,:,k) = double(imread(fileNameCat));
-%         end
-%         prerun_ave = mean(prerun_ims,3);
-%         row_sum_prerun = sum(prerun_ave,1);
-%         clear prerun_ims
-% 
-%         save(av_prerun_filepath,'prerun_ave','row_sum_prerun');
-%      end
-% 
-%         %get rid of background 
-%         row_sum_prerun = row_sum_prerun-min(row_sum_prerun);
-% % 
-% %             figure;
-% %             image(prerun_ave)
-% %             colorbar;
-% %             colormap(turbo(max(prerun_ave(:))));
-% %             grid on;
-% %             axis equal;
-% %             title(["Pre-run average from ",prerun_filefolder])
-% end
+%             figure;
+%             image(prerun_ave)
+%             colorbar;
+%             colormap(turbo(max(prerun_ave(:))));
+%             grid on;
+%             axis equal;
+%             title(["Pre-run average from ",prerun_filefolder])
+end
 
 %% Fitting Prerun Images
 for i = 1:length(datapaths)
@@ -132,37 +135,56 @@ for i = 1:length(datapaths)
         axis equal;
         title(["Pre-run average from ",datapaths(i)])
         subplot(2,1,2);
-        plot(1:length(row_sum_prerun),row_sum_prerun);
-
+        plot(1:length(prerun_row_averages(i,:)),prerun_row_averages(i,:));
 
 end
 
 %% Load Run Images
+        run_ims_count = 7;
+        run_ims = zeros(200,2048,run_ims_count);
+        run_row_averages = zeros(length(datapaths),2048,run_ims_count);
 for i = 1:length(datapaths)
-
-    %Run
-        run_filefolder = fullfile(run_filepath,"run");
+        run_filepath = fullfile(folderpath,datapaths(i),"run");
         have = ["tif"];
         nothave = ["rec"];
-        [filteredfiles_run] = Folders_in_Folder(run_filefolder,have,nothave);
+        [filteredfiles_run] = Folders_in_Folder(run_filepath,have,nothave);
         process_runs = filteredfiles_run(end-6:end);
     
-        run_ims = zeros(200,2048,length(process_runs));
-        figure;
+%         figure;
         for k = 1:length(process_runs)
-            fileNameCat = fullfile(run_filefolder,filteredfiles_run(k));
+            fileNameCat = fullfile(run_filepath,process_runs(k));
             run_ims(:,:,k) = double(imread(fileNameCat));
-            image(run_ims(:,:,k))
-            colorbar;
-            colormap(turbo(max(max(run_ims(:,:,k)))));
-            grid on;
-            axis equal;
-            title(['Image number ', num2str(k)])
+            run_row_averages(i,:,k) = mean(run_ims(:,:,k),1);
 
+%             subplot(2,1,1);
+%             image(run_ims(:,:,k))
+%             colorbar;
+%             colormap(turbo(max(max(run_ims(:,:,k)))));
+%             grid on;
+%             axis equal;
+%             title(['Image number ', num2str(k), process_runs(k)])
+%             subplot(2,1,2);
+%             plot(1:length(run_col_averages(:,:,k)),run_col_averages(:,:,k));
         end
-
 
 end
 
+%% Identify displacements
+
+    %cross correlation
+    for i = 1:length(datapaths) %runs
+        for j = 1:size(run_row_averages,3) %images from each run
+        prerun = prerun_row_averages(i,:);
+        run = run_row_averages(i,:,j);
+        corr = xcorr(prerun,run);
+
+            figure;
+            subplot(3,1,1);
+
+
+        end
+    end
+
+    %Seperate fitting...
 
 %% Velocity Calculation
