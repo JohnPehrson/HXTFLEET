@@ -4,7 +4,21 @@ scalefolder = "SCALES";
 datapaths = ["apr1";"apr1_second";"apr2";"apr4";"apr5";"apr6";"apr7";"apr9";"apr10";"apr11"];
 prerun_foldernames = ["nitro3torr";"nitro3torr";"nitro3torr";"8.6TorrAir"; "air_8_6torr";"air_x_torr";"air";"3torrair";"air_2Torr";"apr11_air_2Torr"];
 
+imaging_settings = [1500,150;...
+                    1500,150;...
+                    1500,150;...
+                    1500,150;...
+                    2000,200;...
+                    3000,200;...
+                    1500,160;...
+                    1500,160;...
+                    1500,160;...
+                    1500,160;]; %[Delay, gate] with rows of runs. The delay time is given in ns to the center of the gate also given in ns.
+
+
 %% Reference image processing and image scales
+
+% load image and find image scales
 
 % folder_folderpath = fullfile(folderpath,scalefolder);
 % [filteredfiles] = Folders_in_Folder(folder_folderpath,"","");
@@ -63,24 +77,17 @@ prerun_foldernames = ["nitro3torr";"nitro3torr";"nitro3torr";"8.6TorrAir"; "air_
 % 
 % end
 
+% Use the image scales I already found.
 images_scales = [21.171;21.58;21.2185;21.17;21.271]; %pix/mm 
-g3g4_ave = mean([images_scales(3),images_scales(4)]);
+g3g4_ave = mean([images_scales(3),images_scales(4)]); 
 
+%Split the image scales between the different runs.
 run_scales = [images_scales(1);images_scales(1);images_scales(1);...
               images_scales(2);g3g4_ave;g3g4_ave;g3g4_ave;g3g4_ave;g3g4_ave;images_scales(5)]; %pix/mm
 
-imaging_settings = [1500,150;...
-                    1500,150;...
-                    1500,150;...
-                    1500,150;...
-                    2000,200;...
-                    3000,200;...
-                    1500,160;...
-                    1500,160;...
-                    1500,160;...
-                    1500,160;]; %[Delay, gate] with rows of runs. The delay time is given in ns to the center of the gate also given in ns.
-
 % Load Prerun Images
+    %load in the images from before the run. Get the average. This is used
+    %as an initial location.
 prerun_row_averages = zeros(length(datapaths),2048); %indexes are run number, column
 
 for i = 1:length(datapaths)
@@ -96,7 +103,7 @@ for i = 1:length(datapaths)
         av_prerun_filepath = fullfile(prerun_filefolder,"AVERAGE.mat");
         have = ["mat"];
         [filteredfiles_ims] = Folders_in_Folder(prerun_filefolder,have,"");
-     if ~isempty(filteredfiles_ims)
+     if ~isempty(filteredfiles_ims) %check if I have already found an average. Do this because it is time-costly to find the average.
         load(av_prerun_filepath);
      else %If I haven't already got a time-average
 
@@ -116,12 +123,12 @@ for i = 1:length(datapaths)
         row_sum_prerun = mean(prerun_ave,1);
         clear prerun_ims
 
-        save(av_prerun_filepath,'prerun_ave','row_sum_prerun');
+        save(av_prerun_filepath,'prerun_ave','row_sum_prerun'); %save the average intensity
      end
 
         %get rid of background 
         prerun_row_averages(i,:) = row_sum_prerun-min(row_sum_prerun);
-
+% 
 %             figure;
 %             image(prerun_ave)
 %             colorbar;
@@ -180,118 +187,116 @@ for i = 1:length(datapaths)
 end
 
 %% Identify displacements in units of pixels
-% close all;
-% f1 = figure;
-% f2 = figure;
-% 
-% disp_ims = zeros(length(datapaths),size(run_row_averages,3));
-% disp_unc_ims = zeros(length(datapaths),size(run_row_averages,3));
-% 
-%     %cross correlation
-%     for i = 1:length(datapaths) %runs
-%         for j = 1:size(run_row_averages,3) %images from each run
-%         prerun = prerun_row_averages(i,:);
-%         run = run_row_averages(i,:,j);
-%         col_length = length(prerun);
-%         corr_step = (-1*(col_length-1)):(col_length-1);
-% 
-%         if min(run(500:1000)) <65000
-% 
-%             %normalization
-%             prerun = prerun./max(prerun);
-%             run = run-min(run(500:1000));
-%             run = run./max(run);
-%             corr = xcorr(prerun,run);
-% 
-%             %plotting
-%             figure(f1);
-%             subplot(2,1,1);
-%             plot(1:col_length,prerun);
-%             title(strcat("Prerun average from run ",num2str(i)));
-%             subplot(2,1,2);
-%             plot(1:col_length,run);
-%             title(strcat("Run ",num2str(i)," image number ",num2str(j)));
-% 
-%             figure(f2);
-%             subplot(2,1,1);
-%             plot(corr_step,corr);
-%             xlim([-200,200]);
-%             title(strcat("Correlation from Run ",num2str(i)," image number ",num2str(j)));
-%             xline(0)
-%             subplot(2,1,2);
-%             plot(corr_step,corr);
-%             title(strcat("Correlation from Run ",num2str(i)," image number ",num2str(j)));
-%             xline(0)
-% 
-%         %Pre-fitting cropping and backgrounding
-%             pix_width = 2048;
-%             t0line = 575;
-%             region_background = (-pix_width+t0line):t0line-1;
-%             Lia = ismember(corr_step,region_background);
-% 
-%             crop_corr = corr(Lia);
-%             crop_step = corr_step(Lia);
-% 
-%         %Fitting
-%             lims = [2*max(corr),1,200,50,100,max(corr);...
-%                     max(corr),0.5,-50,25,10,median(crop_corr);...
-%                     max(corr)/2,0,-200,5,2,median(crop_corr)/2]; %[h,n,x0,sigma,R,bkg];
-% 
-%         [fitvariables,outfit,fit_unc] = MaxFitting(crop_corr,crop_step,lims);
-%             figure(f2);
-%             subplot(2,1,1);
-%             hold on;
-%             plot(crop_step,outfit,'r','Linewidth',2);
-%             xlim([-200,50]);
-%             hold off;
-% 
-%             %residual near the fitting location
-%             region_near_max = round(fitvariables(3));
-%             region_fit = (region_near_max-50):(region_near_max+50);
-%             Lia = ismember(crop_step,region_fit);
-%             fit_region = crop_step(Lia);
-%             fit_corr = crop_corr(Lia);
-%             fit_outfit = outfit(Lia);
-%             resid = sum(abs(fit_corr-fit_outfit));
-% 
-%             resid_thresh = 50;
-%             if resid>resid_thresh
-%                 x = input("Can you identify a peak point accurately?");
-%                 if strcmp(x,"y")
-%                     disp(strcat("Residual was ", num2str(resid)," so manually pick estimate of point height"))
-%                     %manually pick
-%                     figure(f2);
-%                     subplot(2,1,1);
-%                     roi = drawpoint('Color','r');
-%                     displacement = -roi.Position(1);
-% 
-%                     roi = drawline('Color','k');
-%                     displacement_unc = abs(roi.Position(1)-roi.Position(2))/2;
-%                 else
-%                     displacement = NaN;
-%                     displacement_unc = NaN;
-%                 end
-%   
-%             else %use fitted data, send data out
-%                 disp(strcat("Residual was ", num2str(resid)," so use fitted displacement"))
-%                 displacement = -fitvariables(3);
-%                 displacement_unc = 2.*fit_unc;
-% 
-%             end
-%         disp_ims(i,j) = displacement;
-%         disp_unc_ims(i,j) = displacement_unc;
-% 
-%         else
-%         disp_ims(i,j) = NaN;
-%         disp_unc_ims(i,j) = NaN;
-%         end
-% 
-%         end
-%     end
-% 
-%     save_disp_name = "Displacements.mat";
-%     save(save_disp_name,'disp_ims','disp_unc_ims');
+close all;
+f1 = figure;
+f2 = figure;
 
+disp_ims = zeros(length(datapaths),size(run_row_averages,3));
+disp_unc_ims = zeros(length(datapaths),size(run_row_averages,3));
+
+    %cross correlation
+    for i = 1:length(datapaths) %runs
+        for j = 1:size(run_row_averages,3) %images from each run
+        prerun = prerun_row_averages(i,:);
+        run = run_row_averages(i,:,j);
+        col_length = length(prerun);
+        corr_step = (-1*(col_length-1)):(col_length-1);
+
+        if min(run(500:1000)) <65000
+
+            %normalization
+            prerun = prerun./max(prerun);
+            run = run-min(run(500:1000));
+            run = run./max(run);
+            corr = xcorr(prerun,run);
+
+            %plotting
+            figure(f1);
+            subplot(2,1,1);
+            plot(1:col_length,prerun);
+            title(strcat("Prerun average from run ",num2str(i)));
+            subplot(2,1,2);
+            plot(1:col_length,run);
+            title(strcat("Run ",num2str(i)," image number ",num2str(j)));
+
+            figure(f2);
+            subplot(2,1,1);
+            plot(corr_step,corr);
+            xlim([-200,200]);
+            title(strcat("Correlation from Run ",num2str(i)," image number ",num2str(j)));
+            xline(0)
+            subplot(2,1,2);
+            plot(corr_step,corr);
+            title(strcat("Correlation from Run ",num2str(i)," image number ",num2str(j)));
+            xline(0)
+
+        %Pre-fitting cropping and backgrounding
+            pix_width = 2048;
+            t0line = 575;
+            region_background = (-pix_width+t0line):t0line-1;
+            Lia = ismember(corr_step,region_background);
+
+            crop_corr = corr(Lia);
+            crop_step = corr_step(Lia);
+
+        %Fitting
+            lims = [2*max(corr),1,200,50,100,max(corr);...
+                    max(corr),0.5,-50,25,10,median(crop_corr);...
+                    max(corr)/2,0,-200,5,2,median(crop_corr)/2]; %[h,n,x0,sigma,R,bkg];
+
+        [fitvariables,outfit,fit_unc] = MaxFitting(crop_corr,crop_step,lims);
+            figure(f2);
+            subplot(2,1,1);
+            hold on;
+            plot(crop_step,outfit,'r','Linewidth',2);
+            xlim([-200,50]);
+            hold off;
+
+            %residual near the fitting location
+            region_near_max = round(fitvariables(3));
+            region_fit = (region_near_max-50):(region_near_max+50);
+            Lia = ismember(crop_step,region_fit);
+            fit_region = crop_step(Lia);
+            fit_corr = crop_corr(Lia);
+            fit_outfit = outfit(Lia);
+            resid = sum(abs(fit_corr-fit_outfit));
+
+            resid_thresh = 50;
+            if resid>resid_thresh
+                x = input("Can you identify a peak point accurately?",'s');
+                if strcmp(x,"y")
+                    disp(strcat("Residual was ", num2str(resid)," so manually pick estimate of point height"))
+                    %manually pick
+                    figure(f2);
+                    subplot(2,1,1);
+                    roi = drawpoint('Color','r');
+                    displacement = -roi.Position(1);
+
+                    roi = drawline('Color','k');
+                    displacement_unc = abs(roi.Position(1)-roi.Position(2))/2;
+                else
+                    displacement = NaN;
+                    displacement_unc = NaN;
+                end
+  
+            else %use fitted data, send data out
+                disp(strcat("Residual was ", num2str(resid)," so use fitted displacement"))
+                displacement = -fitvariables(3);
+                displacement_unc = 2.*fit_unc;
+            end
+        disp_ims(i,j) = displacement;
+        disp_unc_ims(i,j) = displacement_unc;
+
+        else
+        disp_ims(i,j) = NaN;
+        disp_unc_ims(i,j) = NaN;
+        end
+
+        end
+    end
+
+    save_disp_name = "Displacements.mat";
+    save(save_disp_name,'disp_ims','disp_unc_ims');
 
 %% Velocity Calculation
 %run_scales
@@ -299,7 +304,7 @@ end
 % disp_ims disp_unc_ims
 
 %load in relevant displacements
-save_disp_name = "Displacements.mat";
+save_disp_name = "Displacements.mat"; %use this once you've found the displacements
 load(save_disp_name);
 
 %conversions to standard units
@@ -336,15 +341,16 @@ timing = linspace(1,size(disp_ims,2),size(disp_ims,2));
 
 %% Plotting
 marker_list = ["o";"*";"square";"diamond";"^";"v";"<";">";"pentagram";"hexagram"];
-datapaths_legend = datapaths;
+datapaths_legend = [datapaths(1:3);datapaths(7:10)];
 datapaths_legend(2) = "apr1 run 2";
 datapaths_legend = strcat("Run on ",datapaths_legend);
 
 figure;
-for i= 1:length(datapaths)
+skipruns = [1:3,7:10];
+for i= skipruns
     e = errorbar(timing,velo(i,:),velo_unc(i,:),'o');
     e.Marker = marker_list(i);
-    xlabel('Processed Frames [$\mu$s]','Interpreter','Latex')
+    xlabel('Arbitrary Time [$\mu$s]','Interpreter','Latex')
     ylabel('Freestream Velocity [m/s]')
     hold on;
 end
@@ -354,6 +360,29 @@ xlim([min(timing)-0.5,max(timing)+0.5]);
 grid on;
 set(gca,'FontSize', 18);
 set(gca,'fontname','times')  % Set it to times
+ylim([-200,4000]);
+
+%others
+marker_list = ["o";"*";"square";"diamond";"^";"v";"<";">";"pentagram";"hexagram"];
+datapaths_legend = [datapaths(4:6)];
+datapaths_legend = strcat("Run on ",datapaths_legend);
+
+figure;
+skipruns = [4:6];
+for i= skipruns
+    e = errorbar(timing,velo(i,:),velo_unc(i,:),'o');
+    e.Marker = marker_list(i);
+    xlabel('Arbitrary Time [$\mu$s]','Interpreter','Latex')
+    ylabel('Freestream Velocity [m/s]')
+    hold on;
+end
+
+legend(datapaths_legend)
+xlim([min(timing)-0.5,max(timing)+0.5]);
+grid on;
+set(gca,'FontSize', 18);
+set(gca,'fontname','times')  % Set it to times
+ylim([-200,4000]);
 
 %% Saving
 
